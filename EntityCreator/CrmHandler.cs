@@ -18,6 +18,7 @@ namespace EntityCreator
         private readonly List<Exception> warningList = new List<Exception>();
         private readonly List<string> createdGlobalOptionSetList = new List<string>();
         private readonly List<CreateAttributeRequest> createAttributeRequestList = new List<CreateAttributeRequest>();
+        private readonly List<CreateRequest> createWebResourcesRequestList = new List<CreateRequest>();
         private OrganizationService sharedOrganizationService;
 
         public CrmHandler(string url, string domain, string username, string password)
@@ -45,12 +46,21 @@ namespace EntityCreator
                 CreateGlobalOptionSetAttribute(attributeTemplate);
             }
 
+            CreateRequest createWebRequest = null;
+            if (attributeTemplate.DisplayName.Length > DefaultConfiguration.AttributeDisplayNameMaxLength)
+            {
+                createWebRequest = GetCreateWebResourceRequest(entityLogicalName, attributeTemplate);
+            }
             var createAttributeRequest = GetCreateAttributeRequest(entityLogicalName, attributeTemplate);
             if (createAttributeRequest != null)
             {
                 if (DefaultConfiguration.IsMultipleExecuteRequest)
                 {
                     createAttributeRequestList.Add(createAttributeRequest);
+                    if (createWebRequest != null)
+                    {
+                        createWebResourcesRequestList.Add(createWebRequest);
+                    }
                 }
                 else if (DefaultConfiguration.IsMultiThreadSupport)
                 {
@@ -59,6 +69,12 @@ namespace EntityCreator
                         ExecuteOperation(organizationService, createAttributeRequest,
                             string.Format("An error occured while creating the attribute: {0}",
                                 attributeTemplate.LogicalName));
+                        if (createWebRequest != null)
+                        {
+                            ExecuteOperation(organizationService, createWebRequest,
+                                string.Format("An error occured while creating the web resource for attribute: {0}",
+                                    attributeTemplate.LogicalName));
+                        }
                     }
                 }
                 else
@@ -66,6 +82,12 @@ namespace EntityCreator
                     ExecuteOperation(GetSharedOrganizationService(), createAttributeRequest,
                             string.Format("An error occured while creating the attribute: {0}",
                                 attributeTemplate.LogicalName));
+                    if (createWebRequest != null)
+                    {
+                        ExecuteOperation(GetSharedOrganizationService(), createWebRequest,
+                            string.Format("An error occured while creating the web resource for attribute: {0}",
+                                attributeTemplate.LogicalName));
+                    }
                 }
             }
         }
@@ -82,36 +104,17 @@ namespace EntityCreator
                         Requests = new OrganizationRequestCollection()
                     };
                     executeMultipleRequest.Requests.AddRange(createAttributeRequestList);
-                    executeMultipleRequest.Settings = new ExecuteMultipleSettings
-                    {
-                        ContinueOnError = true,
-                        ReturnResponses = true
-                    };
-                    var organizationResponse = (ExecuteMultipleResponse) organizationService.Execute(executeMultipleRequest);
-                    if (organizationResponse == null || organizationResponse.Responses == null)
-                    {
-                        throw new Exception("Failed to get response for ExecuteMultipleOperation.");
-                    }
+                    ExecuteExecuteMultipleRequest(organizationService, executeMultipleRequest);
+                }
 
-                    foreach (var responseItem in organizationResponse.Responses)
+                if (createWebResourcesRequestList.Any())
+                {
+                    var executeMultipleRequest = new ExecuteMultipleRequest
                     {
-                        if (responseItem.Fault != null)
-                        {
-                            var index = responseItem.RequestIndex;
-                            var schemaName = ((CreateAttributeRequest)executeMultipleRequest.Requests[index]).Attribute.SchemaName;
-                            var errorMessage = string.Format(
-                                    "An error occured while creating the attribute: {0}. Detailed error:\n{1}",
-                                    schemaName, responseItem.Fault.ToErrorString());
-                            if (responseItem.Fault.ErrorCode == -2147192813)
-                            {
-                                warningList.Add(new Exception(errorMessage));
-                            }
-                            else
-                            {
-                                errorList.Add(new Exception(errorMessage));
-                            }
-                        }
-                    }
+                        Requests = new OrganizationRequestCollection()
+                    };
+                    executeMultipleRequest.Requests.AddRange(createWebResourcesRequestList);
+                    ExecuteExecuteMultipleRequest(organizationService, executeMultipleRequest);
                 }
             }
             catch (Exception ex)
@@ -124,6 +127,41 @@ namespace EntityCreator
                 }
             }
         }
+
+        private void ExecuteExecuteMultipleRequest(OrganizationService organizationService, ExecuteMultipleRequest executeMultipleRequest)
+        {
+            executeMultipleRequest.Settings = new ExecuteMultipleSettings
+            {
+                ContinueOnError = true,
+                ReturnResponses = true
+            };
+            var organizationResponse = (ExecuteMultipleResponse) organizationService.Execute(executeMultipleRequest);
+            if (organizationResponse == null || organizationResponse.Responses == null)
+            {
+                throw new Exception("Failed to get response for ExecuteMultipleOperation.");
+            }
+
+            foreach (var responseItem in organizationResponse.Responses)
+            {
+                if (responseItem.Fault != null)
+                {
+                    var index = responseItem.RequestIndex;
+                    var schemaName = ((CreateAttributeRequest) executeMultipleRequest.Requests[index]).Attribute.SchemaName;
+                    var errorMessage = string.Format(
+                        "An error occured while creating the attribute: {0}. Detailed error:\n{1}",
+                        schemaName, responseItem.Fault.ToErrorString());
+                    if (responseItem.Fault.ErrorCode == -2147192813)
+                    {
+                        warningList.Add(new Exception(errorMessage));
+                    }
+                    else
+                    {
+                        errorList.Add(new Exception(errorMessage));
+                    }
+                }
+            }
+        }
+
         private void ExecuteOperation(OrganizationService organizationService, OrganizationRequest createAttributeRequest, string exceptionMessage)
         {
             try
@@ -224,9 +262,41 @@ namespace EntityCreator
                 new AttributeRequiredLevelManagedProperty(attributeTemplate.IsRequired
                     ? AttributeRequiredLevel.SystemRequired
                     : AttributeRequiredLevel.None);
-            createAttributeRequest.Attribute.DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayName);
+            createAttributeRequest.Attribute.DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayNameShort);
             createAttributeRequest.Attribute.Description = GetLabelWithLocalized(attributeTemplate.Description);
             return createAttributeRequest;
+        }
+
+        private CreateRequest GetCreateWebResourceRequest(string entityLogicalName, AttributeTemplate attributeTemplate)
+        {
+            var contents = EncodeTo64(string.Format(DefaultConfiguration.WebResourceTemplate, attributeTemplate.DisplayName));
+            var webResource = new WebResource
+            {
+                Content = contents,
+                DisplayName = attributeTemplate.DisplayNameShort,
+                Description = attributeTemplate.Description,
+                Name = entityLogicalName + "_" + attributeTemplate.LogicalName,
+                LogicalName = WebResource.EntityLogicalName,
+                WebResourceType = new OptionSetValue((int)Enums.WebResourceTypes.Html)
+            };
+            var createRequest = new CreateRequest
+            {
+                Target = webResource
+            };
+
+            if (!string.IsNullOrWhiteSpace(DefaultConfiguration.SolutionUniqueName))
+            {
+                createRequest.Parameters.Add("SolutionUniqueName", DefaultConfiguration.SolutionUniqueName);
+            }
+
+            return createRequest;
+        }
+
+        private string EncodeTo64(string toEncode)
+        {
+            var toEncodeAsBytes = System.Text.Encoding.ASCII.GetBytes(toEncode);
+            var returnValue = Convert.ToBase64String(toEncodeAsBytes);
+            return returnValue;
         }
 
         private MemoAttributeMetadata CreateMultilineAttributeMetadata(AttributeTemplate attributeTemplate)
@@ -262,7 +332,7 @@ namespace EntityCreator
                 OptionSet = new OptionSetMetadata(optionMetadataCollection)
                 {
                     Name = attributeTemplate.GlobalOptionSetListLogicalName,
-                    DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayName),
+                    DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayNameShort),
                     IsGlobal = true,
                     OptionSetType = OptionSetType.Picklist
                 }
@@ -417,7 +487,7 @@ namespace EntityCreator
                 Lookup = new LookupAttributeMetadata
                 {
                     Description = GetLabelWithLocalized(attributeTemplate.Description),
-                    DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayName),
+                    DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayNameShort),
                     LogicalName = attributeTemplate.LogicalName,
                     SchemaName = attributeTemplate.LogicalName,
                     RequiredLevel = new AttributeRequiredLevelManagedProperty(attributeTemplate.IsRequired
@@ -432,6 +502,12 @@ namespace EntityCreator
                 }
             };
 
+            CreateRequest createWebRequest = null;
+            if (attributeTemplate.DisplayName.Length > DefaultConfiguration.AttributeDisplayNameMaxLength)
+            {
+                createWebRequest = GetCreateWebResourceRequest(entityLogicalName, attributeTemplate);
+            }
+            
             if (DefaultConfiguration.IsMultiThreadSupport)
             {
                 using (var organizationService = new OrganizationService(crmConnection))
@@ -439,6 +515,13 @@ namespace EntityCreator
                     ExecuteOperation(organizationService, createOneToManyRequest,
                         string.Format("An error occured while creating the attribute: {0}",
                             attributeTemplate.LogicalName));
+
+                    if (createWebRequest != null)
+                    {
+                        ExecuteOperation(organizationService, createWebRequest,
+                            string.Format("An error occured while creating the web resource for attribute: {0}",
+                                attributeTemplate.LogicalName));
+                    }
                 }
             }
             else
@@ -446,6 +529,13 @@ namespace EntityCreator
                 ExecuteOperation(GetSharedOrganizationService(), createOneToManyRequest,
                         string.Format("An error occured while creating the attribute: {0}",
                             attributeTemplate.LogicalName));
+
+                if (createWebRequest != null)
+                {
+                    ExecuteOperation(GetSharedOrganizationService(), createWebRequest,
+                        string.Format("An error occured while creating the web resource for attribute: {0}",
+                            attributeTemplate.LogicalName));
+                }
             }
         }
 

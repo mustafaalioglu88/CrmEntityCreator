@@ -122,7 +122,7 @@ namespace EntityCreator
         private void exportSampleButton_Click(object sender, EventArgs e)
         {
             var local = Environment.CurrentDirectory;
-            ExtractEmbeddedResource(local, "EntityCreator", "Template.xlsx");
+            ExtractEmbeddedResource(local, "EntityCreator.Resources", "Template.xlsx");
         }
 
         private static void ExtractEmbeddedResource(string outputDir, string resourceLocation, string file)

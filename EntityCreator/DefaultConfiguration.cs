@@ -43,5 +43,10 @@ namespace EntityCreator
         public const string NoDefaultValue = "Hayır";
         public const int DefaultMemoMaxLength = 2000;
         public static readonly char[] OptionSetSplicChar = { ';' };
+        public const string SolutionUniqueName = "";
+        public const string WebResourceTemplate = "<html><head><meta><meta><meta><meta></head><body style='word-wrap: break-word;'><p style='font-family: Segoe UI,Tahoma,Arial; font-size: 12px;'>{0}</p></body></html>";
+        public const int AttributeDescriptionMaxLength = 250;
+        public const int AttributeDisplayNameMaxLength = 100;
+        public const int AttributeLogicalMaxLength = 100;
     }
 }

@@ -66,6 +66,10 @@ namespace EntityCreator
                     continue;
                 }
 
+                var displayName = GetCellValueAsString(xlsRange, currentRow, attributeDisplayNameColumn);
+                var displayNameShort = displayName.Length > DefaultConfiguration.AttributeDisplayNameMaxLength
+                    ? displayName.Substring(0, DefaultConfiguration.AttributeDisplayNameMaxLength)
+                    : displayName;
                 var minLength = default(int);
                 var maxLength = default(int);
                 var minLengthStr = GetCellValueAsString(xlsRange, currentRow, attributeMinValueColumn);
@@ -83,7 +87,8 @@ namespace EntityCreator
                 var attributeTemplate = new AttributeTemplate
                 {
                     LogicalName = logicalName,
-                    DisplayName = GetCellValueAsString(xlsRange, currentRow, attributeDisplayNameColumn),
+                    DisplayName = displayName,
+                    DisplayNameShort = displayNameShort,
                     Description = GetCellValueAsString(xlsRange, currentRow, attributeDescriptionColumn),
                     MinLength = minLength,
                     MaxLength = maxLength,
@@ -131,7 +136,7 @@ namespace EntityCreator
             return entityTemplate;
         }
 
-        private static dynamic GetCellValueAsString(Range xlsRange, int row, int column)
+        private static string GetCellValueAsString(Range xlsRange, int row, int column)
         {
             var cell = (xlsRange.Cells[row, column] as Range);
             var cellValue = cell == null ? null : cell.Value2;

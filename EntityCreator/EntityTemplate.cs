@@ -7,6 +7,7 @@ namespace EntityCreator
     public class TemplateBase
     {
         public string DisplayName { get; set; }
+        public string DisplayNameShort { get; set; }
         public string Description { get; set; }
         public string LogicalName { get; set; }
     }
