@@ -1,6 +1,6 @@
 ﻿using Microsoft.Xrm.Sdk;
 
-namespace EntityCreator
+namespace EntityCreator.Helpers
 {
     public static class Extensions
     {

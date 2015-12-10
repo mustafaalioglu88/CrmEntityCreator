@@ -44,6 +44,8 @@
             this.exportSampleButton = new System.Windows.Forms.Button();
             this.label6 = new System.Windows.Forms.Label();
             this.statusLabel = new System.Windows.Forms.Label();
+            this.openFolderBrowserDialog = new System.Windows.Forms.FolderBrowserDialog();
+            this.progressBar = new System.Windows.Forms.ProgressBar();
             this.SuspendLayout();
             // 
             // label1
@@ -153,7 +155,7 @@
             // 
             // exportSampleButton
             // 
-            this.exportSampleButton.Location = new System.Drawing.Point(233, 113);
+            this.exportSampleButton.Location = new System.Drawing.Point(233, 117);
             this.exportSampleButton.Name = "exportSampleButton";
             this.exportSampleButton.Size = new System.Drawing.Size(82, 43);
             this.exportSampleButton.TabIndex = 12;
@@ -179,11 +181,19 @@
             this.statusLabel.TabIndex = 14;
             this.statusLabel.Text = ":(";
             // 
+            // progressBar
+            // 
+            this.progressBar.Location = new System.Drawing.Point(12, 166);
+            this.progressBar.Name = "progressBar";
+            this.progressBar.Size = new System.Drawing.Size(303, 23);
+            this.progressBar.TabIndex = 15;
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(327, 167);
+            this.ClientSize = new System.Drawing.Size(327, 197);
+            this.Controls.Add(this.progressBar);
             this.Controls.Add(this.statusLabel);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.exportSampleButton);
@@ -225,6 +235,8 @@
         private System.Windows.Forms.Button exportSampleButton;
         private System.Windows.Forms.Label label6;
         internal System.Windows.Forms.Label statusLabel;
+        private System.Windows.Forms.FolderBrowserDialog openFolderBrowserDialog;
+        private System.Windows.Forms.ProgressBar progressBar;
     }
 }
 

@@ -1,4 +1,4 @@
-﻿namespace EntityCreator
+﻿namespace EntityCreator.Models
 {
     public static class Enums
     {

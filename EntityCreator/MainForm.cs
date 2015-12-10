@@ -1,26 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Reflection;
+using System.Threading;
 using System.Windows.Forms;
+using EntityCreator.Helpers;
+using EntityCreator.Models;
 using EntityCreator.Properties;
 
 namespace EntityCreator
 {
     public partial class MainForm : Form
     {
-        private readonly List<string> messagesOfTheDay = new List<string>
-        {
-            "What a lovely day",
-            "You look very nice today",
-            "You deserve everything",
-            "Everything is for you",
-            "You can do it",
-            "Just do it",
-            "Make your wishes come true"
-        };
+        private readonly Stopwatch stopwatch = new Stopwatch();
+        private Action<int> calculateCreatedItems;
+        private Dictionary<string, EntityTemplate> entityTemplates;
+        private int numberOfItemsCreated;
+        private int totalNumberOfItemsWillBeCreated;
 
         public MainForm()
         {
@@ -28,119 +24,129 @@ namespace EntityCreator
             InitializeConfiguration();
         }
 
+        private void CalculateNumberOfItemsCreated(int numberOfItemsCreated)
+        {
+            this.numberOfItemsCreated += numberOfItemsCreated;
+            var percentage = (100*this.numberOfItemsCreated)/totalNumberOfItemsWillBeCreated;
+            Invoke((MethodInvoker) delegate
+            {
+                var value = percentage - progressBar.Value;
+                progressBar.Increment(value); // runs on UI thread
+            });
+        }
+
         private void InitializeConfiguration()
         {
+            SetMessageOfTheDay();
+            calculateCreatedItems += CalculateNumberOfItemsCreated;
+        }
+
+        private void SetMessageOfTheDay()
+        {
             var random = new Random();
-            var index = random.Next(messagesOfTheDay.Count);
-            statusLabel.Text = messagesOfTheDay[index];
-            DefaultConfiguration.IsMultiThreadSupport = false;
-            DefaultConfiguration.ThrowExceptionOnNegligibleErrors = false;
+            var index = random.Next(DefaultConfiguration.MessagesOfTheDay.Count);
+            statusLabel.Text = DefaultConfiguration.MessagesOfTheDay[index];
         }
 
         private void OpenFileButton_Click(object sender, EventArgs e)
         {
-            if (openFileDialog.ShowDialog() == DialogResult.OK)
+            if (openFolderBrowserDialog.ShowDialog() == DialogResult.OK &&
+                !string.IsNullOrWhiteSpace(openFolderBrowserDialog.SelectedPath))
             {
-                if (!string.IsNullOrWhiteSpace(openFileDialog.FileName))
-                {
-                    excelFileText.Text = openFileDialog.FileName + openFileDialog.SafeFileName;
-                }
+                excelFileText.Text = openFolderBrowserDialog.SelectedPath;
             }
         }
 
         private void createEntitiesButton_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(crmServerText.Text) ||
-                string.IsNullOrWhiteSpace(usernameText.Text) ||
-                string.IsNullOrWhiteSpace(passwordText.Text) ||
-                string.IsNullOrWhiteSpace(domainText.Text))
+            if (string.IsNullOrWhiteSpace(crmServerText.Text) || string.IsNullOrWhiteSpace(usernameText.Text) ||
+                string.IsNullOrWhiteSpace(passwordText.Text) || string.IsNullOrWhiteSpace(domainText.Text))
             {
                 MessageBox.Show(Resources.MainForm_createEntitiesButton_Click_Please_fill_all_fields_);
             }
-            else if (string.IsNullOrWhiteSpace(openFileDialog.FileName))
+            else if (string.IsNullOrWhiteSpace(openFolderBrowserDialog.SelectedPath))
             {
                 MessageBox.Show(Resources.MainForm_createEntitiesButton_Click_No_file_found_in_specified_path_);
             }
             else
             {
-                var stopwatch = new Stopwatch();
-                var program = new CrmHandler(crmServerText.Text, domainText.Text, usernameText.Text, passwordText.Text);
-                List<Exception> warnings;
-
-                stopwatch.Start();
-                var errors = program.CreateEntity(GetEntityTemplateFromFile(), out warnings);
-                stopwatch.Stop();
-
-                var outputMessage = string.Format("Completed in {0} ", stopwatch.Elapsed);
-                if (warnings.Any())
-                {
-                    WriteWarningLog(warnings);
-                    outputMessage += "\n" + string.Format("There are {0} warnings. Please see warningsLog", warnings.Count);
-                }
-
-                if (errors.Any())
-                {
-                    WriteErrorLog(errors);
-                    outputMessage += "\n" + string.Format("There are {0} errors. Please see errorLog", errors.Count);
-                }
-                MessageBox.Show(outputMessage);
+                progressBar.Maximum = 100;
+                progressBar.Step = 1;
+                progressBar.Value = 0;
+                var thread = new Thread(StartExectionThread);
+                thread.Start();
             }
         }
 
-        private void WriteErrorLog(List<Exception> errors)
+        private string StartExecution(Action<int> calculateCreatedItems)
         {
-            WriteLog(errors, "errorlog");
-        }
+            var program = new CrmHelper(crmServerText.Text, domainText.Text, usernameText.Text, passwordText.Text);
+            stopwatch.Start();
 
-        private void WriteWarningLog(List<Exception> warnings)
-        {
-            WriteLog(warnings, "warninglog");
-        }
-
-        private void WriteLog(List<Exception> issueList, string fileName)
-        {
-            var errorMessageLong = string.Empty;
-            foreach (var exception in issueList)
+            var excelFiles = FileHelpers.GetExcelFiles(openFolderBrowserDialog.SelectedPath);
+            var genericErrorList = new Dictionary<string, List<Exception>>();
+            var genericWarningList = new Dictionary<string, List<Exception>>();
+            entityTemplates = new Dictionary<string, EntityTemplate>();
+            foreach (var excelFile in excelFiles)
             {
-                errorMessageLong += exception + "\n";
+                var entityTemplate = FileHelpers.GetEntityTemplateFromFile(excelFile);
+                if (entityTemplate == null)
+                    continue;
+                if (entityTemplate.WebResource != null)
+                    totalNumberOfItemsWillBeCreated += entityTemplate.AttributeList.Count +
+                                                       entityTemplate.WebResource.Count + 1;
+                else
+                {
+                    totalNumberOfItemsWillBeCreated += entityTemplate.AttributeList.Count + 1;
+                }
+                entityTemplates.Add(excelFile, entityTemplate);
             }
 
-            var path = fileName + ".txt";
-            using (var sw = new StreamWriter(path, true))
+            foreach (var template in entityTemplates)
             {
-                sw.WriteLine(errorMessageLong);
-                sw.Close();
+                program.CreateEntity(template.Key, template.Value, calculateCreatedItems);
+
+                genericErrorList.Add(template.Key, template.Value.Errors);
+                genericWarningList.Add(template.Key, template.Value.Warnings);
+
+                FileHelpers.MarkFileAsProcessed(template.Key);
             }
+
+            stopwatch.Stop();
+            var outputMessage = GenerateOutputMessage(genericWarningList, genericErrorList);
+            return outputMessage;
         }
 
-        private EntityTemplate GetEntityTemplateFromFile()
+        private string GenerateOutputMessage(Dictionary<string, List<Exception>> warnings,
+            Dictionary<string, List<Exception>> errors)
         {
-            var excelHelper = new ExcedHelper(openFileDialog.FileName);
-            return excelHelper.GetEntityTemplateFromFile();
+            var outputMessage = string.Format("Completed in {0} ", stopwatch.Elapsed);
+            stopwatch.Reset();
+
+            if (warnings.Any())
+            {
+                FileHelpers.WriteWarningLog(warnings);
+                outputMessage += "\n" + string.Format("There are {0} warnings. Please see warningsLogs", warnings.Count);
+            }
+
+            if (errors.Any())
+            {
+                FileHelpers.WriteErrorLog(errors);
+                outputMessage += "\n" + string.Format("There are {0} errors. Please see errorLogs", errors.Count);
+            }
+
+            return outputMessage;
         }
 
         private void exportSampleButton_Click(object sender, EventArgs e)
         {
-            var local = Environment.CurrentDirectory;
-            ExtractEmbeddedResource(local, "EntityCreator.Resources", "Template.xlsx");
+            FileHelpers.ExtractResources();
         }
 
-        private static void ExtractEmbeddedResource(string outputDir, string resourceLocation, string file)
+        private void StartExectionThread()
         {
-            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceLocation + @"." + file))
-            {
-                if (stream != null)
-                {
-                    using (var fileStream = new FileStream(Path.Combine(outputDir, file), FileMode.Create))
-                    {
-                        for (var i = 0; i < stream.Length; i++)
-                        {
-                            fileStream.WriteByte((byte) stream.ReadByte());
-                        }
-                        fileStream.Close();
-                    }
-                }
-            }
+            var outputMessage = StartExecution(calculateCreatedItems);
+            MessageBox.Show(outputMessage);
         }
     }
 }

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk.Metadata;
 
-namespace EntityCreator
+namespace EntityCreator.Models
 {
     public class TemplateBase
     {
@@ -16,6 +16,9 @@ namespace EntityCreator
     {
         public string DisplayNamePlural { get; set; }
         public List<AttributeTemplate> AttributeList { get; set; }
+        public List<WebResource> WebResource { get; set; }
+        public List<Exception> Warnings { get; set; }
+        public List<Exception> Errors { get; set; }
     }
 
     public class AttributeTemplate : TemplateBase
