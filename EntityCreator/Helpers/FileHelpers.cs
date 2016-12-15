@@ -9,11 +9,12 @@ namespace EntityCreator.Helpers
 {
     public static class FileHelpers
     {
+        private const string lineSeperator = "##########################################################################################################################";
         public static void WriteErrorLog(Dictionary<string, List<Exception>> errors)
         {
             foreach (var error in errors)
             {
-                WriteLog(error.Value, "Error_" + error.Key);
+                WriteLog(error.Value, "_Error",  error.Key);
             }
         }
 
@@ -21,22 +22,26 @@ namespace EntityCreator.Helpers
         {
             foreach (var warning in warnings)
             {
-                WriteLog(warning.Value, "Warning_" + warning.Key);
+                WriteLog(warning.Value, "_Warning", warning.Key);
             }
         }
 
-        private static void WriteLog(IEnumerable<Exception> issueList, string fileNameFull)
+        private static void WriteLog(IEnumerable<Exception> issueList, string postfix, string fileNameFull)
         {
-            var fileNameSplitted = fileNameFull.Split('\\');
-            var fileName = fileNameSplitted.Last();
+            var fileNameSplitted = fileNameFull.Split('.');
+            var fullFileName = fileNameFull.Insert(fileNameFull.IndexOf("." + fileNameSplitted.Last(), StringComparison.Ordinal), postfix);
 
+            //var fileNameSplitted = fileNameFull.Split('\\');
+            //var fileExtensionSplitted = fileNameSplitted.Last().Split('.');
+            //var fileName = fileNameSplitted.Last().Insert("." + fileExtensionSplitted.Last(), "")
+            //var fullFileName = fileNameFull.Replace(fileNameSplitted.Last(), fileName);
             var errorMessage = string.Empty;
             foreach (var exception in issueList)
             {
-                errorMessage += exception + "\n";
+                errorMessage += exception + "\n" + lineSeperator + "\n";
             }
 
-            var path = fileName + ".txt";
+            var path = fullFileName + ".txt";
             using (var sw = new StreamWriter(path, true))
             {
                 sw.WriteLine(errorMessage);

@@ -34,6 +34,9 @@ namespace EntityCreator.Helpers
         private const int attributeGlobalOptionSetListLogicalNameColumn = 7;
         private const int attributeMinValueColumn = 8;
         private const int attributeMaxValueColumn = 9;
+        private const int attributeRequiredColumn = 10;
+        private const int attributeOtherDisplayNameColumn = 11;
+        private const int attributeOtherDescriptionColumn = 12;
 
         private const int webresourceLogicalNameColumn = 1;
         private const int webresourceDisplayNameColumn = 2;
@@ -68,17 +71,21 @@ namespace EntityCreator.Helpers
 
             if (GetEntityTemplate(excelFile, entityTemplate.Errors, entityTemplate, xlsRange))
             {
-                return null;
+                entityTemplate.WillCreateEntity = false;
             }
-
+            else
+            {
+                entityTemplate.WillCreateEntity = true;
+            }
             for (var currentRow = attributeTemplateFirstRow; currentRow <= xlsRange.Rows.Count; currentRow++)
             {
                 var logicalName = GetCellValueAsString(xlsRange, currentRow, attributeLogicalNameColumn);
-                if (string.IsNullOrWhiteSpace(logicalName))
+                var displayName = GetCellValueAsString(xlsRange, currentRow, attributeDisplayNameColumn);
+                if (string.IsNullOrWhiteSpace(logicalName) || string.IsNullOrWhiteSpace(displayName))
                 {
-                    entityTemplate.Errors.Add(
-                        new Exception(string.Format("Attribute LogicalName or DisplayName can not be empty. File: {0}",
-                            excelFile)));
+                    //entityTemplate.Errors.Add(
+                    //    new Exception(string.Format("Attribute LogicalName or DisplayName can not be empty. File: {0}",
+                    //        excelFile)));
                     continue;
                 }
 
@@ -153,6 +160,20 @@ namespace EntityCreator.Helpers
                 attributeTemplate.GlobalOptionSetListLogicalName =
                     attributeTemplate.GlobalOptionSetListLogicalName.Trim();
             }
+            else if (attributeTemplate.AttributeType == typeof(NNRelation))
+            {
+                attributeTemplate.LookupEntityLogicalName = GetCellValueAsString(xlsRange, currentRow,
+                    attributeLookupEntityLogicalNameColumn);
+                if (string.IsNullOrWhiteSpace(attributeTemplate.LookupEntityLogicalName))
+                {
+                    errorList.Add(
+                        new Exception(
+                            string.Format(
+                                "Attribute LookupEntityLogicalName can not be empty for NN fields. File: {0}",
+                                excelFile)));
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -167,12 +188,18 @@ namespace EntityCreator.Helpers
             var maxLength = default(int);
             var minLengthStr = GetCellValueAsString(xlsRange, currentRow, attributeMinValueColumn);
             var maxLengthStr = GetCellValueAsString(xlsRange, currentRow, attributeMaxValueColumn);
-            if (!string.IsNullOrWhiteSpace(maxLengthStr) && int.TryParse(maxLengthStr, out maxLength))
+            maxLengthStr = maxLengthStr.Replace(".", "").Replace(",",".");
+            var isRequiredStr = GetCellValueAsString(xlsRange, currentRow, attributeRequiredColumn).ToLower();
+            var isRequired = false;// DefaultConfiguration.YesKeywordList.Contains(isRequiredStr);
+
+            if (!string.IsNullOrWhiteSpace(maxLengthStr) && !int.TryParse(maxLengthStr, out maxLength))
             {
                 maxLength = default(int);
             }
+            minLengthStr = minLengthStr.Replace(".", "").Replace(",",".");
+            
 
-            if (!string.IsNullOrWhiteSpace(minLengthStr) && int.TryParse(minLengthStr, out minLength))
+            if (!string.IsNullOrWhiteSpace(minLengthStr) && !int.TryParse(minLengthStr, out minLength))
             {
                 minLength = default(int);
             }
@@ -192,7 +219,10 @@ namespace EntityCreator.Helpers
                 Description = GetCellValueAsString(xlsRange, currentRow, attributeDescriptionColumn),
                 MinLength = minLength,
                 MaxLength = maxLength,
-                AttributeType = attributeType
+                AttributeType = attributeType,
+                IsRequired = isRequired,
+                OtherDisplayName = GetCellValueAsString(xlsRange, currentRow, attributeOtherDisplayNameColumn),
+                OtherDescription = GetCellValueAsString(xlsRange, currentRow, attributeOtherDescriptionColumn)
             };
 
             attributeTemplate.LogicalName = attributeTemplate.LogicalName.Trim();
@@ -237,10 +267,10 @@ namespace EntityCreator.Helpers
             var xlsRange = webresourceSheet.UsedRange;
             for (var currentRow = webresourceTemplateFirstRow; currentRow < xlsRange.Rows.Count; currentRow++)
             {
-                var logicalName = GetCellValueAsString(xlsRange, currentRow, webresourceLogicalNameColumn);
-                var displayName = GetCellValueAsString(xlsRange, currentRow, webresourceDisplayNameColumn);
-                var description = GetCellValueAsString(xlsRange, currentRow, webresourceDescriptionColumn);
-                var type = GetCellValueAsString(xlsRange, currentRow, webresourceTypeColumn);
+                var logicalName = GetCellValueAsString(xlsRange, currentRow, webresourceLogicalNameColumn).Replace("\n", "");
+                var displayName = GetCellValueAsString(xlsRange, currentRow, webresourceDisplayNameColumn).Replace("\n", "");
+                var description = GetCellValueAsString(xlsRange, currentRow, webresourceDescriptionColumn).Replace("\n", "");
+                var type = GetCellValueAsString(xlsRange, currentRow, webresourceTypeColumn).Replace("\n", "");
                 var content =
                     CommonHelper.EncodeTo64(GetCellValueAsString(xlsRange, currentRow, webresourceContentColumn));
 
@@ -278,12 +308,14 @@ namespace EntityCreator.Helpers
             {
                 var optionSetArray = optionSetListString.Split(DefaultConfiguration.OptionSetSplicChar).ToList();
                 var startIndex = defaultOptionSetStartIndex;
-                foreach (var optionSetLabel in optionSetArray)
+                foreach (var optionSetValueStrLoop in optionSetArray)
                 {
+                    var optionSetValueStr = optionSetValueStrLoop.Trim();
+                    var labelValueList = optionSetValueStr.Split('=').ToList();
                     var optionSetTemplate = new OptionSetTemplate
                     {
-                        Label = optionSetLabel.Trim(),
-                        Value = startIndex
+                        Label = labelValueList.First().Trim(),
+                        Value = Convert.ToInt32(labelValueList.Last().Trim())
                     };
                     optionSetTemplateList.Add(optionSetTemplate);
                     startIndex++;

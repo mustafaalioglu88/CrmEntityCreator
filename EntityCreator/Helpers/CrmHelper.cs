@@ -13,22 +13,16 @@ namespace EntityCreator.Helpers
 {
     public class CrmHelper: IDisposable
     {
-        private readonly List<CreateAttributeRequest> createAttributeRequestList;
-        private readonly List<string> createdGlobalOptionSetList;
-        private readonly List<CreateRequest> createWebResourcesRequestList;
+        private List<CreateAttributeRequest> createAttributeRequestList;
+        private List<string> createdGlobalOptionSetList;
+        private List<CreateRequest> createWebResourcesRequestList;
         private readonly CrmConnection crmConnection;
-        private readonly List<Exception> errorList;
-        private readonly List<Exception> warningList;
+        private List<Exception> errorList;
+        private List<Exception> warningList;
         private OrganizationService sharedOrganizationService;
 
         public CrmHelper(string url, string domain, string username, string password)
         {
-            createAttributeRequestList = new List<CreateAttributeRequest>();
-            createdGlobalOptionSetList = new List<string>();
-            createWebResourcesRequestList = new List<CreateRequest>();
-            errorList = new List<Exception>();
-            warningList = new List<Exception>();
-
             crmConnection =
                 CrmConnection.Parse(string.Format(DefaultConfiguration.ConnectionFormat, url, domain, username, password));
             crmConnection.Timeout = new TimeSpan(0, 0, DefaultConfiguration.TimeoutExceptionInMinutes, 0);
@@ -50,6 +44,12 @@ namespace EntityCreator.Helpers
             if (attributeTemplate.AttributeType == typeof (Lookup))
             {
                 CreateLookupAttribute(entityLogicalName, attributeTemplate);
+                return;
+            }
+
+            if (attributeTemplate.AttributeType == typeof(NNRelation))
+            {
+                CreateNNRelation(entityLogicalName, attributeTemplate);
                 return;
             }
 
@@ -89,7 +89,7 @@ namespace EntityCreator.Helpers
             }
         }
 
-        private void ExecuteMultipleOperation(string exceptionMessage,Action<int> calculateCreatedItems)
+        private void ExecuteMultipleOperation(string exceptionMessage, Action<string> setMessageOfTheDayLabel)
         {
             var organizationService = GetSharedOrganizationService();
             try
@@ -103,10 +103,10 @@ namespace EntityCreator.Helpers
                     for (var i = 0; i < createAttributeRequestList.Count; i++)
                     {
                         executeMultipleRequest.Requests.Add(createAttributeRequestList[i]);
-                        if (i%DefaultConfiguration.ExecuteMultipleSize == 0)
+                        if (i%DefaultConfiguration.ExecuteMultipleSize == 0 || createAttributeRequestList.Count-i<10)
                         {
                             ExecuteExecuteMultipleRequest(organizationService, executeMultipleRequest);
-                            calculateCreatedItems(executeMultipleRequest.Requests.Count);
+                            //setMessageOfTheDayLabel(executeMultipleRequest.Requests.Count);
                             executeMultipleRequest = new ExecuteMultipleRequest
                             {
                                 Requests = new OrganizationRequestCollection()
@@ -124,10 +124,10 @@ namespace EntityCreator.Helpers
                     for (var i = 0; i < createWebResourcesRequestList.Count; i++)
                     {
                         executeMultipleRequest.Requests.Add(createWebResourcesRequestList[i]);
-                        if (i%DefaultConfiguration.ExecuteMultipleSize == 0)
+                        if (i % DefaultConfiguration.ExecuteMultipleSize == 0 || createAttributeRequestList.Count - i < 10)
                         {
                             ExecuteExecuteMultipleRequest(organizationService, executeMultipleRequest);
-                            calculateCreatedItems(executeMultipleRequest.Requests.Count);
+                            //setMessageOfTheDayLabel(executeMultipleRequest.Requests.Count);
                             executeMultipleRequest = new ExecuteMultipleRequest
                             {
                                 Requests = new OrganizationRequestCollection()
@@ -211,6 +211,11 @@ namespace EntityCreator.Helpers
         private CreateAttributeRequest GetCreateAttributeRequest(string entityLogicalName,
             AttributeTemplate attributeTemplate)
         {
+            if (attributeTemplate.AttributeType == typeof(Primary))
+            {
+                return null;
+            }
+
             var createAttributeRequest = new CreateAttributeRequest {EntityName = entityLogicalName};
             if (attributeTemplate.AttributeType == typeof (string))
             {
@@ -268,6 +273,18 @@ namespace EntityCreator.Helpers
                     : AttributeRequiredLevel.None);
             createAttributeRequest.Attribute.DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayNameShort);
             createAttributeRequest.Attribute.Description = GetLabelWithLocalized(attributeTemplate.Description);
+            if(!string.IsNullOrWhiteSpace(attributeTemplate.OtherDisplayName))
+            {
+                var otherDisplayLabel = new LocalizedLabel(attributeTemplate.OtherDisplayName, DefaultConfiguration.OtherLanguageCode);
+                createAttributeRequest.Attribute.DisplayName.LocalizedLabels.Add(otherDisplayLabel);
+            }
+
+            if (!string.IsNullOrWhiteSpace(attributeTemplate.OtherDescription))
+            {
+                var otherDescriptionLabel = new LocalizedLabel(attributeTemplate.OtherDescription, DefaultConfiguration.OtherLanguageCode);
+                createAttributeRequest.Attribute.Description.LocalizedLabels.Add(otherDescriptionLabel);
+            }
+
             return createAttributeRequest;
         }
         
@@ -317,15 +334,9 @@ namespace EntityCreator.Helpers
         {
             var floatAttributeMetadata = new DoubleAttributeMetadata 
             {
-                MinValue = attributeTemplate.MinLength == default(double)
-                    ? DefaultConfiguration.DefaultDoubleMinValue
-                    : attributeTemplate.MinLength,
-                MaxValue = attributeTemplate.MaxLength == default(double)
-                    ? DefaultConfiguration.DefaultDoubleMaxValue
-                    : attributeTemplate.MaxLength,
-                Precision = attributeTemplate.Precision == default(int)
-                    ? DefaultConfiguration.DefaultDoublePrecision
-                    : attributeTemplate.Precision
+                MinValue = -100000000000.00,
+                MaxValue = 100000000000.00,
+                Precision = 2
             };
 
             return floatAttributeMetadata;
@@ -365,10 +376,23 @@ namespace EntityCreator.Helpers
                 {
                     Name = attributeTemplate.GlobalOptionSetListLogicalName,
                     DisplayName = GetLabelWithLocalized(attributeTemplate.DisplayNameShort),
+                    Description = GetLabelWithLocalized(attributeTemplate.Description),
                     IsGlobal = true,
                     OptionSetType = OptionSetType.Picklist
                 }
             };
+
+            if (!string.IsNullOrWhiteSpace(attributeTemplate.OtherDisplayName))
+            {
+                var otherDisplayLabel = new LocalizedLabel(attributeTemplate.OtherDisplayName, DefaultConfiguration.OtherLanguageCode);
+                createOptionSetRequest.OptionSet.DisplayName.LocalizedLabels.Add(otherDisplayLabel);
+            }
+
+            if (!string.IsNullOrWhiteSpace(attributeTemplate.OtherDescription))
+            {
+                var otherDescriptionLabel = new LocalizedLabel(attributeTemplate.OtherDescription, DefaultConfiguration.OtherLanguageCode);
+                createOptionSetRequest.OptionSet.Description.LocalizedLabels.Add(otherDescriptionLabel);
+            }
 
             ExecuteOperation(GetSharedOrganizationService(), createOptionSetRequest,
                 string.Format("An error occured while creating the attribute: {0}",
@@ -434,15 +458,9 @@ namespace EntityCreator.Helpers
         {
             var decimalAttributeMetadata = new DecimalAttributeMetadata
             {
-                MinValue = attributeTemplate.MinLength == default(int)
-                    ? DefaultConfiguration.DefaultDecimalMinValue
-                    : attributeTemplate.MinLength,
-                MaxValue = attributeTemplate.MaxLength == default(int)
-                    ? DefaultConfiguration.DefaultDecimalMaxValue
-                    : attributeTemplate.MaxLength,
-                Precision = attributeTemplate.Precision == default(int)
-                    ? DefaultConfiguration.DefaultDecimalPrecision
-                    : attributeTemplate.Precision
+                MinValue = -100000000000.00M,
+                MaxValue = 100000000000.00M,
+                Precision = 2
             };
             return decimalAttributeMetadata;
         }
@@ -502,6 +520,14 @@ namespace EntityCreator.Helpers
 
         private void CreateLookupAttribute(string entityLogicalName, AttributeTemplate attributeTemplate)
         {
+            var schemaName = attributeTemplate.LogicalName + "_" +
+                        attributeTemplate.LookupEntityLogicalName + "_" +
+                        entityLogicalName;
+            if(schemaName.Length > 100)
+            {
+                schemaName = schemaName.Substring(default(int), 100);
+            }
+
             var createOneToManyRequest = new CreateOneToManyRequest
             {
                 Lookup = new LookupAttributeMetadata
@@ -518,9 +544,21 @@ namespace EntityCreator.Helpers
                 {
                     ReferencedEntity = attributeTemplate.LookupEntityLogicalName,
                     ReferencingEntity = entityLogicalName,
-                    SchemaName = attributeTemplate.LookupEntityLogicalName + "_" + entityLogicalName
+                    SchemaName = schemaName
                 }
             };
+
+            if (!string.IsNullOrWhiteSpace(attributeTemplate.OtherDisplayName))
+            {
+                var otherDisplayLabel = new LocalizedLabel(attributeTemplate.OtherDisplayName, DefaultConfiguration.OtherLanguageCode);
+                createOneToManyRequest.Lookup.DisplayName.LocalizedLabels.Add(otherDisplayLabel);
+            }
+
+            if (!string.IsNullOrWhiteSpace(attributeTemplate.OtherDescription))
+            {
+                var otherDescriptionLabel = new LocalizedLabel(attributeTemplate.OtherDescription, DefaultConfiguration.OtherLanguageCode);
+                createOneToManyRequest.Lookup.Description.LocalizedLabels.Add(otherDescriptionLabel);
+            }
 
             CreateRequest createWebRequest = null;
             if (attributeTemplate.DisplayName.Length > DefaultConfiguration.AttributeDisplayNameMaxLength)
@@ -540,8 +578,68 @@ namespace EntityCreator.Helpers
             }
         }
 
-        public void CreateEntity(string excelFile, EntityTemplate entityTemplate,Action<int> calculateCreatedItems)
+        private void CreateNNRelation(string entityLogicalName, AttributeTemplate attributeTemplate)
         {
+            string entity1Logical, entity2Logical;
+            var displayNames = attributeTemplate.DisplayName.Split(';');
+            var entity1Display = displayNames.First();
+            var entity2Display = displayNames.Last();
+            if (attributeTemplate.Description == "1")
+            {
+                entity1Logical = attributeTemplate.LogicalName;
+                entity2Logical = attributeTemplate.LookupEntityLogicalName;
+            }
+            else
+            {
+                entity1Logical = attributeTemplate.LookupEntityLogicalName;
+                entity2Logical = attributeTemplate.LogicalName;
+            }
+
+            AssociatedMenuBehavior? entity1Behavior = entity1Display == entity1Logical ? AssociatedMenuBehavior.DoNotDisplay : AssociatedMenuBehavior.UseLabel;
+            AssociatedMenuBehavior? entity2Behavior = entity2Display == entity2Logical ? AssociatedMenuBehavior.DoNotDisplay : AssociatedMenuBehavior.UseLabel;
+
+            var createManyToManyRelationshipRequest =
+                new CreateManyToManyRequest
+                {
+                    IntersectEntitySchemaName = attributeTemplate.LogicalName,
+                    ManyToManyRelationship = new ManyToManyRelationshipMetadata
+                    {
+                        SchemaName = attributeTemplate.LogicalName,
+                        Entity1LogicalName = entity1Logical,
+                        Entity1AssociatedMenuConfiguration =
+                        new AssociatedMenuConfiguration
+                        {
+                            Behavior = entity1Behavior,
+                            Group = AssociatedMenuGroup.Details,
+                            Label = new Label(entity1Display, 1033),
+                            Order = 10000
+                        },
+                        Entity2LogicalName = entity2Logical,
+                        Entity2AssociatedMenuConfiguration =
+                        new AssociatedMenuConfiguration
+                        {
+                            Behavior = entity2Behavior,
+                            Group = AssociatedMenuGroup.Details,
+                            Label = new Label(entity2Display, 1033),
+                            Order = 10000
+                        }
+                    }
+                };
+
+            ExecuteOperation(GetSharedOrganizationService(), createManyToManyRelationshipRequest,
+                string.Format("An error occured while creating the NN: {0}",
+                    attributeTemplate.LogicalName));
+
+        }
+
+        public void CreateEntity(string excelFile, EntityTemplate entityTemplate, Action<string> setMessageOfTheDayLabel)
+        {
+            errorList = new List<Exception>();
+            warningList = new List<Exception>();
+            createAttributeRequestList = new List<CreateAttributeRequest>();
+            createdGlobalOptionSetList = new List<string>();
+            createWebResourcesRequestList = new List<CreateRequest>();
+
             if (entityTemplate == null)
             {
                 errorList.Add(
@@ -551,34 +649,36 @@ namespace EntityCreator.Helpers
                 entityTemplate.Errors.AddRange(errorList);
                 return;
             }
-
-            var createrequest = new CreateEntityRequest();
-            var entityMetadata = new EntityMetadata
+            if (entityTemplate.WillCreateEntity)
             {
-                SchemaName = entityTemplate.LogicalName,
-                DisplayName = GetLabelWithLocalized(entityTemplate.DisplayName),
-                DisplayCollectionName = GetLabelWithLocalized(entityTemplate.DisplayNamePlural),
-                Description = GetLabelWithLocalized(entityTemplate.Description),
-                OwnershipType = DefaultConfiguration.DefaultOwnershipType,
-                IsActivity = false
-            };
-            createrequest.PrimaryAttribute = GetPrimaryAttribute();
-            createrequest.Entity = entityMetadata;
-            ExecuteOperation(GetSharedOrganizationService(), createrequest,
-                string.Format("An error occured while creating the entity: {0}", entityTemplate.LogicalName));
-            calculateCreatedItems(1);
+                var createrequest = new CreateEntityRequest();
+                var entityMetadata = new EntityMetadata
+                {
+                    SchemaName = entityTemplate.LogicalName,
+                    DisplayName = GetLabelWithLocalized(entityTemplate.DisplayName),
+                    DisplayCollectionName = GetLabelWithLocalized(entityTemplate.DisplayNamePlural),
+                    Description = GetLabelWithLocalized(entityTemplate.Description),
+                    OwnershipType = DefaultConfiguration.DefaultOwnershipType,
+                    IsActivity = false
+                };
+                createrequest.PrimaryAttribute = GetPrimaryAttribute(entityTemplate);
+                createrequest.Entity = entityMetadata;
+                ExecuteOperation(GetSharedOrganizationService(), createrequest,
+                    string.Format("An error occured while creating the entity: {0}", entityTemplate.LogicalName));
+                //setMessageOfTheDayLabel("1");
+                if (entityTemplate.AttributeList == null)
+                {
+                    entityTemplate.Warnings.AddRange(warningList);
+                    entityTemplate.Errors.AddRange(errorList);
+                }
 
-            if (entityTemplate.AttributeList == null)
-            {
-                entityTemplate.Warnings.AddRange(warningList);
-                entityTemplate.Errors.AddRange(errorList);
+
+                foreach (var attributeTemplate in entityTemplate.AttributeList)
+                {
+                    CreateAttribute(entityTemplate.LogicalName, attributeTemplate);
+                }
             }
-
-
-            foreach (var attributeTemplate in entityTemplate.AttributeList)
-            {
-                CreateAttribute(entityTemplate.LogicalName, attributeTemplate);
-            }
+            
             var requests = new ExecuteMultipleRequest
             {
                 Requests = new OrganizationRequestCollection()
@@ -589,35 +689,35 @@ namespace EntityCreator.Helpers
                 {
                     var webresourceRequest = GetCreateWebResourceRequest(entityTemplate.WebResource[i]);
                     requests.Requests.Add(webresourceRequest);
-                    if (i % DefaultConfiguration.ExecuteMultipleSize == 0)
+                    if (i % DefaultConfiguration.ExecuteMultipleSize == 0 || createAttributeRequestList.Count - i < 10)
                     {
                         ExecuteMultipleWebresourceRequests(requests);
-                        calculateCreatedItems(requests.Requests.Count);
+                        //setMessageOfTheDayLabel(requests.Requests.Count);
                         requests = new ExecuteMultipleRequest
                         {
                             Requests = new OrganizationRequestCollection()
                         };
-
                     }
                 }
             }
-            
 
-            ExecuteMultipleOperation("Execute multiple error occured.",calculateCreatedItems);
-
+            ExecuteMultipleOperation("Execute multiple error occured.", setMessageOfTheDayLabel);
             entityTemplate.Warnings.AddRange(warningList);
             entityTemplate.Errors.AddRange(errorList);
         }
 
-        private StringAttributeMetadata GetPrimaryAttribute()
+        private StringAttributeMetadata GetPrimaryAttribute(EntityTemplate entityTemplate)
         {
+            var primaryAttribute = (from attribute in entityTemplate.AttributeList where attribute.AttributeType == typeof(Primary) select attribute).FirstOrDefault();
+
             var stringAttributeMetadata = new StringAttributeMetadata
             {
-                SchemaName = DefaultConfiguration.DefaultPrimaryAttribute,
-                RequiredLevel = new AttributeRequiredLevelManagedProperty(AttributeRequiredLevel.None),
-                DisplayName = GetLabelWithLocalized(DefaultConfiguration.DefaultPrimaryAttributeDisplayName),
-                Description = GetLabelWithLocalized(DefaultConfiguration.DefaultPrimaryAttributeDescription),
-                MaxLength = DefaultConfiguration.DefaultStringMaxLength,
+                SchemaName = primaryAttribute != null ? primaryAttribute.LogicalName : DefaultConfiguration.DefaultPrimaryAttribute,
+                RequiredLevel = new AttributeRequiredLevelManagedProperty(
+                    primaryAttribute != null && primaryAttribute.IsRequired ? AttributeRequiredLevel.SystemRequired : AttributeRequiredLevel.None),
+                DisplayName = GetLabelWithLocalized(primaryAttribute != null ? primaryAttribute.DisplayNameShort : DefaultConfiguration.DefaultPrimaryAttributeDisplayName),
+                Description = GetLabelWithLocalized(primaryAttribute != null ? primaryAttribute.Description : DefaultConfiguration.DefaultPrimaryAttributeDescription),
+                MaxLength = primaryAttribute != null ? primaryAttribute.MaxLength : DefaultConfiguration.DefaultStringMaxLength,
                 FormatName = DefaultConfiguration.DefaultStringFormatName
             };
             return stringAttributeMetadata;

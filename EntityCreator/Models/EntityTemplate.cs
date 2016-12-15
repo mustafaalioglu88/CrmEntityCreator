@@ -10,6 +10,8 @@ namespace EntityCreator.Models
         public string DisplayNameShort { get; set; }
         public string Description { get; set; }
         public string LogicalName { get; set; }
+        public string OtherDisplayName { get; set; }
+        public string OtherDescription { get; set; }
     }
 
     public class EntityTemplate : TemplateBase
@@ -19,6 +21,7 @@ namespace EntityCreator.Models
         public List<WebResource> WebResource { get; set; }
         public List<Exception> Warnings { get; set; }
         public List<Exception> Errors { get; set; }
+        public bool WillCreateEntity { get; set; }
     }
 
     public class AttributeTemplate : TemplateBase

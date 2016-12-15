@@ -83,7 +83,15 @@ namespace EntityCreator.Helpers
             {
                 return typeof(float);
             }
-            errorList.Add(new Exception(string.Format("AttributeType is not in defined list. File: {0}", excelFile)));
+            if (DefaultConfiguration.PrimaryAttributeTypeList.Contains(lowerAttributeTypeString))
+            {
+                return typeof(Primary);
+            }
+            if (DefaultConfiguration.NNRelationAttributeTypeList.Contains(lowerAttributeTypeString))
+            {
+                return typeof(NNRelation);
+            }
+            errorList.Add(new Exception(string.Format("AttributeType is not in defined list. File: {0} Type: {1}", excelFile, lowerAttributeTypeString)));
             return typeof (Exception);
         }
     }

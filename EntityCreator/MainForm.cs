@@ -13,10 +13,11 @@ namespace EntityCreator
     public partial class MainForm : Form
     {
         private readonly Stopwatch stopwatch = new Stopwatch();
-        private Action<int> calculateCreatedItems;
+        //private Action<int> calculateCreatedItems;
+        //private Action<string> setMessageOfTheDayAction;
         private Dictionary<string, EntityTemplate> entityTemplates;
-        private int numberOfItemsCreated;
-        private int totalNumberOfItemsWillBeCreated;
+        //private int numberOfItemsCreated;
+        //private int totalNumberOfItemsWillBeCreated;
 
         public MainForm()
         {
@@ -24,21 +25,33 @@ namespace EntityCreator
             InitializeConfiguration();
         }
 
-        private void CalculateNumberOfItemsCreated(int numberOfItemsCreated)
+        //private void CalculateNumberOfItemsCreated(int numberOfItemsCreated)
+        //{
+        //    this.numberOfItemsCreated += numberOfItemsCreated;
+        //    var percentage = (100*this.numberOfItemsCreated)/totalNumberOfItemsWillBeCreated;
+        //    Invoke((MethodInvoker) delegate
+        //    {
+        //        var value = percentage - progressBar.Value;
+        //        progressBar.Increment(value); // runs on UI thread
+        //    });
+        //}
+
+        private void SetMessageOfTheDayUi(string messageOfTheDay)
         {
-            this.numberOfItemsCreated += numberOfItemsCreated;
-            var percentage = (100*this.numberOfItemsCreated)/totalNumberOfItemsWillBeCreated;
-            Invoke((MethodInvoker) delegate
+            Invoke((MethodInvoker)delegate
             {
-                var value = percentage - progressBar.Value;
-                progressBar.Increment(value); // runs on UI thread
+                statusLabel.Text = messageOfTheDay;
             });
         }
 
         private void InitializeConfiguration()
         {
+            this.Text += " v." + System.Reflection.Assembly.GetExecutingAssembly()
+                                           .GetName()
+                                           .Version; 
             SetMessageOfTheDay();
-            calculateCreatedItems += CalculateNumberOfItemsCreated;
+            //calculateCreatedItems += CalculateNumberOfItemsCreated;
+            //setMessageOfTheDayAction += SetMessageOfTheDayUi;
         }
 
         private void SetMessageOfTheDay()
@@ -70,50 +83,70 @@ namespace EntityCreator
             }
             else
             {
-                progressBar.Maximum = 100;
-                progressBar.Step = 1;
-                progressBar.Value = 0;
+                createEntitiesButton.Enabled = false;
+                //progressBar.Maximum = 100;
+                //progressBar.Step = 1;
+                //progressBar.Value = 0;
                 var thread = new Thread(StartExectionThread);
                 thread.Start();
             }
         }
 
-        private string StartExecution(Action<int> calculateCreatedItems)
+        private string StartExecution(Action<string> setMessageOfTheDayLabel)
         {
+            setMessageOfTheDayLabel("Execution started");
             var program = new CrmHelper(crmServerText.Text, domainText.Text, usernameText.Text, passwordText.Text);
+            setMessageOfTheDayLabel("CRM connection created");
             stopwatch.Start();
 
+            setMessageOfTheDayLabel("Excel files started to read");
             var excelFiles = FileHelpers.GetExcelFiles(openFolderBrowserDialog.SelectedPath);
             var genericErrorList = new Dictionary<string, List<Exception>>();
             var genericWarningList = new Dictionary<string, List<Exception>>();
             entityTemplates = new Dictionary<string, EntityTemplate>();
+            int i = 1;
             foreach (var excelFile in excelFiles)
             {
+                var fileName = excelFile.Split('\\').Last();
+                setMessageOfTheDayLabel(i.ToString() + "/" + excelFiles.Count() + ": File reading: " + fileName);
                 var entityTemplate = FileHelpers.GetEntityTemplateFromFile(excelFile);
                 if (entityTemplate == null)
                     continue;
-                if (entityTemplate.WebResource != null)
-                    totalNumberOfItemsWillBeCreated += entityTemplate.AttributeList.Count +
-                                                       entityTemplate.WebResource.Count + 1;
-                else
-                {
-                    totalNumberOfItemsWillBeCreated += entityTemplate.AttributeList.Count + 1;
-                }
+                //if (entityTemplate.WebResource != null)
+                //    totalNumberOfItemsWillBeCreated += entityTemplate.AttributeList.Count +
+                //                                       entityTemplate.WebResource.Count + 1;
+                //else if (
+                //    !entityTemplate.WillCreateEntity && entityTemplate.WebResource != null)
+                //{
+                //    totalNumberOfItemsWillBeCreated += entityTemplate.WebResource.Count;
+                //}
+                //else
+                //{
+                //    totalNumberOfItemsWillBeCreated += entityTemplate.AttributeList.Count + 1;
+                //}
                 entityTemplates.Add(excelFile, entityTemplate);
+                i++;
             }
 
+            i = 1;
+            setMessageOfTheDayLabel("Excel files read has finished.");
             foreach (var template in entityTemplates)
             {
-                program.CreateEntity(template.Key, template.Value, calculateCreatedItems);
+                var fileName = template.Key.Split('\\').Last();
+                setMessageOfTheDayLabel(i.ToString() + "/" + entityTemplates.Count() + ": On CRM: " + fileName);
+                program.CreateEntity(template.Key, template.Value, setMessageOfTheDayLabel);
 
                 genericErrorList.Add(template.Key, template.Value.Errors);
                 genericWarningList.Add(template.Key, template.Value.Warnings);
 
                 FileHelpers.MarkFileAsProcessed(template.Key);
+                i++;
             }
 
             stopwatch.Stop();
             var outputMessage = GenerateOutputMessage(genericWarningList, genericErrorList);
+            program.Dispose();
+            setMessageOfTheDayLabel("Done. Are you happy now? You can start over.");
             return outputMessage;
         }
 
@@ -145,7 +178,7 @@ namespace EntityCreator
 
         private void StartExectionThread()
         {
-            var outputMessage = StartExecution(calculateCreatedItems);
+            var outputMessage = StartExecution(SetMessageOfTheDayUi);
             MessageBox.Show(outputMessage);
         }
     }

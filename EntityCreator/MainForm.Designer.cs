@@ -85,6 +85,7 @@
             // 
             this.passwordText.Location = new System.Drawing.Point(89, 62);
             this.passwordText.Name = "passwordText";
+            this.passwordText.PasswordChar = '8';
             this.passwordText.Size = new System.Drawing.Size(138, 20);
             this.passwordText.TabIndex = 5;
             // 
@@ -131,7 +132,7 @@
             // 
             this.createEntitiesButton.Location = new System.Drawing.Point(233, 36);
             this.createEntitiesButton.Name = "createEntitiesButton";
-            this.createEntitiesButton.Size = new System.Drawing.Size(82, 72);
+            this.createEntitiesButton.Size = new System.Drawing.Size(82, 46);
             this.createEntitiesButton.TabIndex = 9;
             this.createEntitiesButton.Text = "Create";
             this.createEntitiesButton.UseVisualStyleBackColor = true;
@@ -155,7 +156,7 @@
             // 
             // exportSampleButton
             // 
-            this.exportSampleButton.Location = new System.Drawing.Point(233, 117);
+            this.exportSampleButton.Location = new System.Drawing.Point(233, 91);
             this.exportSampleButton.Name = "exportSampleButton";
             this.exportSampleButton.Size = new System.Drawing.Size(82, 43);
             this.exportSampleButton.TabIndex = 12;
@@ -192,7 +193,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(327, 197);
+            this.ClientSize = new System.Drawing.Size(327, 166);
             this.Controls.Add(this.progressBar);
             this.Controls.Add(this.statusLabel);
             this.Controls.Add(this.label6);

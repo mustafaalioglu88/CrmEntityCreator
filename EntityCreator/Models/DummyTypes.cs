@@ -15,4 +15,12 @@
     public class Multiline
     {
     }
+
+    public class Primary
+    {
+    }
+
+    public class NNRelation
+    {
+    }
 }

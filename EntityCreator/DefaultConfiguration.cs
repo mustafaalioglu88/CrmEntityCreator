@@ -19,7 +19,8 @@ namespace EntityCreator
 
         #region ExecutionConfigurationParameters
 
-        public const int DefaultLanguageCode = 1055;
+        public const int DefaultLanguageCode = 1033;
+        public const int OtherLanguageCode = 1036;
         public const int ExecuteMultipleSize = 10;
         public const int TimeoutExceptionInMinutes = 60;
         public const int AttributeDisplayNameMaxLength = 100;
@@ -52,7 +53,7 @@ namespace EntityCreator
         public const string YesDefaultValue = "Evet";
         public const string NoDefaultValue = "Hayır";
 
-        public const string DefaultPrimaryAttribute = "tse_name";
+        public const string DefaultPrimaryAttribute = "vrp_name";
         public const string DefaultPrimaryAttributeDisplayName = "Name";
         public const string DefaultPrimaryAttributeDescription = "Primary field for entity.";
 
@@ -60,7 +61,7 @@ namespace EntityCreator
 
         #region AttributeTypeStringLists
 
-        public static readonly List<string> StringAttributeTypeList = new List<string> {"string"};
+        public static readonly List<string> StringAttributeTypeList = new List<string> {"string", "singleline"};
         public static readonly List<string> IntAttributeTypeList = new List<string> {"int"};
         public static readonly List<string> DecimalAttributeTypeList = new List<string> {"decimal"};
         public static readonly List<string> OptionSetAttributeTypeList = new List<string> {"optionset"};
@@ -71,6 +72,9 @@ namespace EntityCreator
         public static readonly List<string> LookupAttributeTypeList = new List<string> {"lookup"};
         public static readonly List<string> MultilineAttributeTypeList = new List<string> {"multiline"};
         public static readonly List<string> FloatAttributeTypeList = new List<string> {"float", "double"};
+        public static readonly List<string> PrimaryAttributeTypeList = new List<string> { "primary" };
+        public static readonly List<string> NNRelationAttributeTypeList = new List<string> { "nn", "n:n" };
+        public static readonly List<string> YesKeywordList = new List<string> {"yes"};
 
         public static readonly char[] OptionSetSplicChar = {';'};
 
